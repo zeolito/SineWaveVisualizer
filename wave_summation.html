@@ -1,0 +1,312 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Wave Summation</title>
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            margin: 0;
+            padding: 20px;
+            background: #fafafa;
+            color: #333;
+        }
+        
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+        
+        .controls {
+            background: white;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+            margin-bottom: 20px;
+        }
+        
+        .wave-control {
+            display: flex;
+            align-items: center;
+            gap: 15px;
+            margin-bottom: 15px;
+            padding: 10px;
+            background: #f8f9fa;
+            border-radius: 6px;
+        }
+        
+        .wave-control label {
+            min-width: 80px;
+            font-weight: 500;
+        }
+        
+        input[type="range"] {
+            flex: 1;
+            height: 6px;
+            background: #ddd;
+            border-radius: 3px;
+            outline: none;
+        }
+        
+        input[type="range"]::-webkit-slider-thumb {
+            appearance: none;
+            width: 18px;
+            height: 18px;
+            background: #007bff;
+            border-radius: 50%;
+            cursor: pointer;
+        }
+        
+        .value-display {
+            min-width: 50px;
+            text-align: right;
+            font-weight: 600;
+            color: #555;
+        }
+        
+        .canvas-container {
+            background: white;
+            border-radius: 8px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+            padding: 20px;
+        }
+        
+        canvas {
+            display: block;
+            width: 100%;
+            border: 1px solid #e0e0e0;
+            border-radius: 4px;
+        }
+        
+        .add-wave {
+            background: #007bff;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 14px;
+            font-weight: 500;
+            transition: background 0.2s;
+        }
+        
+        .add-wave:hover {
+            background: #0056b3;
+        }
+        
+        .remove-wave {
+            background: #dc3545;
+            color: white;
+            border: none;
+            padding: 5px 10px;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 12px;
+            margin-left: 10px;
+        }
+        
+        .remove-wave:hover {
+            background: #c82333;
+        }
+        
+        h1 {
+            text-align: center;
+            color: #2c3e50;
+            margin-bottom: 30px;
+            font-weight: 300;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Wave Summation Visualizer</h1>
+        
+        <div class="controls">
+            <div id="waveControls"></div>
+            <button class="add-wave" onclick="addWave()">Add Wave</button>
+        </div>
+        
+        <div class="canvas-container">
+            <canvas id="waveCanvas" width="1000" height="600"></canvas>
+        </div>
+    </div>
+
+    <script>
+        const canvas = document.getElementById('waveCanvas');
+        const ctx = canvas.getContext('2d');
+        
+        let waves = [
+            { amplitude: 1, frequency: 1, color: '#3498db', direction: 1 },
+            { amplitude: 0.8, frequency: 2, color: '#2ecc71', direction: -1 }
+        ];
+        
+        let animationTime = 0;
+        let animationId;
+        
+        const colors = ['#3498db', '#2ecc71', '#e74c3c', '#f39c12', '#9b59b6', '#1abc9c', '#34495e', '#e67e22'];
+        
+        function createWaveControl(index) {
+            return `
+                <div class="wave-control" data-wave="${index}">
+                    <label>Wave ${index + 1}</label>
+                    <label>A:</label>
+                    <input type="range" min="0" max="2" step="0.1" value="${waves[index].amplitude}" 
+                           onchange="updateWave(${index}, 'amplitude', this.value)">
+                    <span class="value-display" id="amp-${index}">${waves[index].amplitude}</span>
+                    <label>f:</label>
+                    <input type="range" min="0.1" max="5" step="0.1" value="${waves[index].frequency}" 
+                           onchange="updateWave(${index}, 'frequency', this.value)">
+                    <span class="value-display" id="freq-${index}">${waves[index].frequency}</span>
+                    ${waves.length > 1 ? `<button class="remove-wave" onclick="removeWave(${index})">×</button>` : ''}
+                </div>
+            `;
+        }
+        
+        function updateControls() {
+            const container = document.getElementById('waveControls');
+            container.innerHTML = waves.map((_, i) => createWaveControl(i)).join('');
+        }
+        
+        function updateWave(index, property, value) {
+            waves[index][property] = parseFloat(value);
+            document.getElementById(`${property === 'amplitude' ? 'amp' : 'freq'}-${index}`).textContent = value;
+            drawWaves();
+        }
+        
+        function addWave() {
+            const colorIndex = waves.length % colors.length;
+            const direction = waves.length % 2 === 0 ? 1 : -1;
+            waves.push({
+                amplitude: 1,
+                frequency: 1,
+                color: colors[colorIndex],
+                direction: direction
+            });
+            updateControls();
+            drawWaves();
+        }
+        
+        function removeWave(index) {
+            if (waves.length > 1) {
+                waves.splice(index, 1);
+                updateControls();
+                drawWaves();
+            }
+        }
+        
+        function drawWaves() {
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            
+            const width = canvas.width;
+            const height = canvas.height;
+            const waveHeight = Math.min(60, (height - 120) / (waves.length + 1));
+            const sumWaveHeight = height - 120 - (waves.length * waveHeight);
+            const padding = 20;
+            
+            // Draw individual waves
+            waves.forEach((wave, index) => {
+                const y = padding + index * waveHeight + waveHeight / 2;
+                drawWave(wave, y, waveHeight * 0.4, wave.color, `s${index + 1}`);
+            });
+            
+            // Calculate and draw sum wave
+            const sumY = height - sumWaveHeight / 2 - 20;
+            drawSumWave(sumY, sumWaveHeight * 0.4);
+        }
+        
+        function drawWave(wave, centerY, amplitude, color, label) {
+            ctx.strokeStyle = color;
+            ctx.lineWidth = 2;
+            ctx.beginPath();
+            
+            for (let x = 0; x < canvas.width; x++) {
+                const t = (x / canvas.width) * 4 * Math.PI;
+                const phase = wave.direction * animationTime * 0.02;
+                const y = centerY - wave.amplitude * amplitude * Math.sin(wave.frequency * t + phase);
+                
+                if (x === 0) {
+                    ctx.moveTo(x, y);
+                } else {
+                    ctx.lineTo(x, y);
+                }
+            }
+            ctx.stroke();
+            
+            // Draw center line
+            ctx.strokeStyle = '#ccc';
+            ctx.lineWidth = 1;
+            ctx.setLineDash([5, 5]);
+            ctx.beginPath();
+            ctx.moveTo(0, centerY);
+            ctx.lineTo(canvas.width, centerY);
+            ctx.stroke();
+            ctx.setLineDash([]);
+            
+            // Draw label with direction indicator
+            ctx.fillStyle = '#666';
+            ctx.font = '14px Arial';
+            const arrow = wave.direction > 0 ? '→' : '←';
+            ctx.fillText(`${label} ${arrow}`, 10, centerY - amplitude - 5);
+        }
+        
+        function drawSumWave(centerY, amplitude) {
+            ctx.strokeStyle = '#e74c3c';
+            ctx.lineWidth = 3;
+            ctx.beginPath();
+            
+            for (let x = 0; x < canvas.width; x++) {
+                const t = (x / canvas.width) * 4 * Math.PI;
+                let sumY = 0;
+                
+                waves.forEach(wave => {
+                    const phase = wave.direction * animationTime * 0.02;
+                    sumY += wave.amplitude * Math.sin(wave.frequency * t + phase);
+                });
+                
+                const y = centerY - sumY * amplitude;
+                
+                if (x === 0) {
+                    ctx.moveTo(x, y);
+                } else {
+                    ctx.lineTo(x, y);
+                }
+            }
+            ctx.stroke();
+            
+            // Draw center line
+            ctx.strokeStyle = '#ccc';
+            ctx.lineWidth = 1;
+            ctx.setLineDash([5, 5]);
+            ctx.beginPath();
+            ctx.moveTo(0, centerY);
+            ctx.lineTo(canvas.width, centerY);
+            ctx.stroke();
+            ctx.setLineDash([]);
+            
+            // Draw label
+            ctx.fillStyle = '#333';
+            ctx.font = '16px Arial';
+            ctx.fontWeight = 'bold';
+            ctx.fillText('x(t) = s₁ + s₂ + ... (Sum)', 10, centerY - amplitude - 10);
+        }
+        
+        function animate() {
+            animationTime++;
+            drawWaves();
+            animationId = requestAnimationFrame(animate);
+        }
+        
+        // Initialize
+        updateControls();
+        animate();
+        
+        // Handle canvas resize
+        window.addEventListener('resize', () => {
+            const rect = canvas.getBoundingClientRect();
+            canvas.width = rect.width;
+            drawWaves();
+        });
+    </script>
+</body>
+</html>
